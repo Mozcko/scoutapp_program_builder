@@ -10,7 +10,9 @@
         "gst_plugins_base",
         "gst_plugins_good",
         "gst_plugins_bad",
-        "mpv-unwrapped"
+        "mpv-unwrapped",
+        "xorg.xvfb",
+        "xorg.xauth"
       ],
       "install": [
         "pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu",
@@ -19,7 +21,7 @@
     }
   },
   "deploy": {
-    "startCommand": "flet run --web src/main.py",
+    "startCommand": "xvfb-run python3 src/main.py",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
