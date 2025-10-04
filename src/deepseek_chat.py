@@ -1,75 +1,31 @@
 import os
+import json
 from openai import OpenAI, APIStatusError
 from dotenv import load_dotenv
 from pathlib import Path
-import pypdf  # Se importa la librería para leer PDFs
 
-# --- CONFIGURACIÓN Y CONSTANTES ---
+# --- CONFIGURACIÓN ---
 try:
+    # Busca el .env en la raíz del proyecto
     env_path = Path(__file__).parent.parent / '.env'
     load_dotenv(dotenv_path=env_path)
 except Exception as e:
     print(f"Advertencia: No se pudo cargar el archivo .env. Error: {e}")
 
-SCOUT_SYSTEM_PROMPT = """
-1. Rol y Objetivo
-Rol: Eres un educador no formal (Scout) experto en diseñar programas de actividades atractivos, seguros y significativos para jóvenes, especialista en el programa de jóvenes de la Asociación de Scouts de México (ASMAC).
-Objetivo: Crear programas de una sola sesión para diferentes secciones (Manada, Tropa, Comunidad), adaptando las actividades a condiciones específicas y a la progresión de los jóvenes. Tu tono debe ser claro, inspirador y profesional, utilizando la terminología del Escultismo (ASMAC).
-2. Proceso de la Sesión
-Inicio: Antes de generar cualquier programa, debes hacer las siguientes preguntas al usuario, una por una, esperando su respuesta para proceder:
-"¡Hola! Soy tu asistente para diseñar programas Scout. Para empezar, ¿para qué rango de edad (Sección) quieres diseñar el programa?"
-Posibles respuestas y sus progresiones/insignias asociadas:
-Manada (6-9 años):
-Progresión: Raksha, Baloo, Hermano Gris, Bagheera
-Insignias de Aventura: Mowha, Dhak, Tregua del agua, Flor Roja
-Tropa (10-14 años):
-Progresión:  Tortuga Lora, Venado Cola Blanca,  Quetzal,  Ocelote
-Insignias de Aventura: Ajolote de xochimilco,  Jaguar,  Águila aguila solitaria, Mapache de cozumel
-Comunidad (14-17 años):
-Progresión:  Cima, Cumbre, Cúspide, Cenit
-Insignias de Aventura: ️ Terranova, kon-tiki, Discovery, 7 Cumbres
- 
-"¿En qué nivel de progresión y qué insignia de aventura de las opciones anteriores quieres enfocarte para esta sesión?" (Aquí el Gem debe basarse en la respuesta de la pregunta 1 para ofrecer las opciones correctas).
-"¿Cuál es la duración total de la sesión (ej. 2 horas)?"
-"¿Cuáles son las condiciones climáticas previstas y la disposición del grupo? (Ej. Lluvioso con alta disposición a estar al aire libre, soleado, etc.)"
-"¿Cuáles son los objetivos específicos de la sesión (ej. Aprender técnicas de orientación, trabajo en equipo)?"
-"¿Te gustaría dejar algún espacio reservado para que lo completes con una actividad propia? Si es así, ¿qué tipo de actividad te gustaría reservar? (Ej. Desfogue, Técnica, Habilidad, etc.)"
-Diseño del Programa: Una vez que el usuario proporcione toda la información, genera un programa único que cumpla con todos los siguientes requisitos fijos:
- 
-1. **Resumen inicial:** - Indicar qué territorios y qué insignias se trabajarán en la sesión. 
- - Explicar brevemente los objetivos del programa. 
- 2. **Tabla de actividades:** - Duración total: **2 horas**. 
- - Cada actividad debe durar entre **10 y 15 minutos**. 
- - Orden de actividades: 
- - **Apertura:** oración, revisión del equipo de bolsillo, limpieza y uniforme completo. 
- - **Actividades en el siguiente orden:** - Desfogue 
- - Desfogue 
- - Técnica 
- - Desfogue 
- - Técnica 
- - Desfogue 
- - Habilidad 
- - Desfogue 
- - Desfogue 
- - Las actividades **técnicas** deben alinearse con la progresión de las insignias de Aventuras en la Naturaleza. 
- - **Columnas de la tabla:** - Número de actividad 
- - Hora 
- - Duración 
- - Objetivo(s) 
- - Nombre 
- - Materiales 
- - Explicación 
- - Porcentaje de progresión alcanzado en la insignia correspondiente 
- 3. **Lista consolidada de materiales:** - Al final de cada programa, debe incluirse una lista con **todas las cantidades necesarias de materiales** para la sesión.
-Debe incluir una nota sobre el equipo personal requerido (ej. impermeables, botas, etc.).
-Contenido: El programa debe ser Desafiante, Útil, Recompensante, Atractivo, Seguro, Inclusivo y Lúdico (DURASIL).
-Espacios Reservados: Si el usuario respondió afirmativamente a la pregunta 6, deja en blanco los campos (Nombre, Materiales, Explicación) para la actividad que el usuario especificó. Marca estos espacios claramente como "[ESPACIO RESERVADO PARA ACTIVIDAD DEL USUARIO]".
-3. Seguimiento (Al Finalizar)
-Al terminar el programa, realiza las siguientes preguntas para ofrecer ayuda adicional o generar un nuevo programa:
-"¿Quieres que diseñe un nuevo programa con otros parámetros?"
-"""
-
 # --- FUNCIONES AUXILIARES ---
+
+def load_system_prompt(prompt_path: Path) -> str:
+    """Carga el prompt del sistema desde un archivo de texto."""
+    print(f"Cargando prompt del sistema desde: {prompt_path}...")
+    try:
+        if not prompt_path.is_file():
+            raise FileNotFoundError(f"El archivo de prompt '{prompt_path.name}' no se encontró en la carpeta 'prompts'.")
+        
+        prompt = prompt_path.read_text(encoding='utf-8')
+        print("¡Prompt del sistema cargado exitosamente!")
+        return prompt
+    except Exception as e:
+        raise RuntimeError(f"No se pudo leer el archivo de prompt: {e}")
 
 def setup_client() -> OpenAI:
     """Configura y devuelve el cliente de OpenAI para la API de DeepSeek."""
@@ -77,87 +33,67 @@ def setup_client() -> OpenAI:
     if not api_key:
         raise ValueError("No se encontró la DEEPSEEK_API_KEY. Revisa tu archivo .env.")
     
-    return OpenAI(
-        api_key=api_key,
-        base_url="https://api.deepseek.com/v1"
-    )
+    return OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")
 
-def cargar_contexto_desde_archivos(ruta_carpeta: Path) -> str:
-    """
-    Lee todos los archivos de una carpeta, extrayendo texto de PDFs y
-    leyendo otros archivos como texto plano, mostrando el progreso.
-    """
-    print(f"Cargando archivos de contexto desde: {ruta_carpeta}...")
-    
-    if not ruta_carpeta.is_dir():
-        print(f"ADVERTENCIA: La carpeta '{ruta_carpeta}' no existe. El chat no tendrá contexto de archivos.")
-        return ""
-
-    # Obtener lista de archivos para tener un contador total
-    archivos_a_procesar = [f for f in ruta_carpeta.iterdir() if f.is_file()]
-    total_archivos = len(archivos_a_procesar)
-    
-    if total_archivos == 0:
-        print("No se encontraron archivos en la carpeta de contexto.")
-        return ""
-
-    print(f"Se encontraron {total_archivos} archivos para procesar.")
-    contexto_completo = []
-    
-    # --- BUCLE MEJORADO CON RETROALIMENTACIÓN ---
-    for i, archivo in enumerate(sorted(archivos_a_procesar), 1):
-        # Imprime el progreso antes de empezar a procesar
-        print(f"  [{i}/{total_archivos}] Procesando '{archivo.name}'...", end="", flush=True)
-
-        contenido_archivo = ""
-        try:
-            if archivo.suffix.lower() == '.pdf':
-                reader = pypdf.PdfReader(archivo, strict=False) # strict=False para manejar mejor los PDFs con errores
-                texto_paginas = [page.extract_text() for page in reader.pages if page.extract_text()]
-                contenido_archivo = "\n".join(texto_paginas)
-            else:
-                contenido_archivo = archivo.read_text(encoding='utf-8', errors='ignore')
-
-            if contenido_archivo.strip():
-                contexto_completo.append(f"--- INICIO DEL ARCHIVO: {archivo.name} ---\n")
-                contexto_completo.append(contenido_archivo)
-                contexto_completo.append(f"\n--- FIN DEL ARCHIVO: {archivo.name} ---\n\n")
-                # Imprime un "OK" en la misma línea si todo fue bien
-                print(" OK")
-            else:
-                # Informa si un archivo no tenía texto extraíble
-                print(" Vacío (sin texto).")
+def load_context_chunks(index_path: Path) -> list[str]:
+    """Carga los trozos de contexto desde el archivo de índice JSON."""
+    print(f"Cargando índice de contexto desde: {index_path}...")
+    try:
+        if not index_path.is_file():
+            raise FileNotFoundError(
+                f"El archivo de índice '{index_path.name}' no se encontró. "
+                "Por favor, ejecuta 'python create_index.py' para generarlo."
+            )
         
-        except Exception as e:
-            # Informa de un error en la misma línea
-            print(f" ERROR ({type(e).__name__})")
-            # Opcional: imprimir el error completo para más detalles
-            # print(f"\nError detallado para {archivo.name}: {e}\n")
-    
-    if not contexto_completo:
-        print("No se pudo extraer texto de ningún archivo.")
-        return ""
-        
-    print("\n¡Carga de contexto finalizada exitosamente!")
-    return "".join(contexto_completo)
+        with open(index_path, 'r', encoding='utf-8') as f:
+            chunks = json.load(f)
+        print(f"¡Índice cargado! {len(chunks)} trozos de conocimiento disponibles.")
+        return chunks
+    except Exception as e:
+        raise RuntimeError(f"No se pudo leer el archivo de índice: {e}")
 
-def create_system_prompt(file_context: str) -> str:
-    """Combina el prompt base del Scout con el contexto de los archivos."""
-    return f"""
-{SCOUT_SYSTEM_PROMPT}
+def find_relevant_context(query: str, chunks: list[str], top_k: int = 5) -> str:
+    """Encuentra los 'top_k' trozos de contexto más relevantes para una consulta."""
+    query_words = set(query.lower().split())
+    if not query_words:
+        return ""
+
+    scores = []
+    for i, chunk in enumerate(chunks):
+        chunk_words = set(chunk.lower().split())
+        common_words = query_words.intersection(chunk_words)
+        score = len(common_words)
+        if score > 0:
+            scores.append((score, i))
+    
+    scores.sort(reverse=True)
+    top_indices = [i for score, i in scores[:top_k]]
+    
+    relevant_chunks = [chunks[i] for i in top_indices]
+    
+    if relevant_chunks:
+        print(f"-> Se encontraron {len(relevant_chunks)} trozos de contexto relevantes para la consulta.")
+    
+    return "\n---\n".join(relevant_chunks)
+
+def create_system_prompt_with_context(base_prompt: str, relevant_context: str) -> dict:
+    """Crea el mensaje del sistema para la API."""
+    system_content = f"""
+{base_prompt}
 
 ---
-4. Conocimiento Adicional Basado en Archivos
-Además de tu rol como diseñador de programas, tienes acceso al siguiente contenido. Debes usar esta información como fuente principal si el usuario pregunta sobre temas específicos contenidos en ella.
+4. Conocimiento Relevante para la Pregunta Actual
+Usa la siguiente información de tus archivos para responder la pregunta del usuario.
 
-CONTEXTO DE ARCHIVOS:
-{file_context if file_context else "No se proporcionaron archivos de contexto adicionales."}
+CONTEXTO RELEVANTE:
+{relevant_context if relevant_context else "No se encontró contexto relevante en los archivos para esta pregunta."}
 ---
 """
+    return {"role": "system", "content": system_content}
 
-def run_chat_loop(client: OpenAI, initial_history: list):
+def run_chat_loop(client: OpenAI, context_chunks: list[str], base_prompt: str):
     """Maneja el bucle principal de la conversación en la consola."""
-    historial_mensajes = initial_history.copy()
+    historial_mensajes = [] 
     
     print("\n¡Conexión exitosa! El Scout Program Builder está listo.")
     print("Para comenzar, escribe algo como 'Quiero empezar a diseñar un programa'.")
@@ -171,29 +107,30 @@ def run_chat_loop(client: OpenAI, initial_history: list):
             
             historial_mensajes.append({"role": "user", "content": user_prompt})
             
+            relevant_context = find_relevant_context(user_prompt, context_chunks)
+            
+            system_message = create_system_prompt_with_context(base_prompt, relevant_context)
+            
+            messages_to_send = [system_message] + historial_mensajes
+            
             print("\nScout Program Builder está pensando...")
 
             chat_completion = client.chat.completions.create(
-                model="deepseek-chat",
-                messages=historial_mensajes,
+                model="deepseek-coder",
+                messages=messages_to_send,
                 max_tokens=4096,
                 temperature=0.7, 
             )
             
             ai_response = chat_completion.choices[0].message.content
-            historial_mensajes.append({"role": "assistant", "content": ai_response})
             
+            historial_mensajes.append({"role": "assistant", "content": ai_response})
+
             print(f"\nScout Program Builder: {ai_response}")
 
         except APIStatusError as e:
-            print(f"\n--- ERROR DE API ---")
-            if e.status_code == 401:
-                print("Error de autenticación. Tu clave de API (DEEPSEEK_API_KEY) es incorrecta.")
-            elif e.status_code == 402:
-                print("Error de pago: Saldo insuficiente en tu cuenta de DeepSeek.")
-            else:
-                print(f"Ocurrió un error con la API de DeepSeek: {e.message}")
-            print("Por favor, revisa tu configuración y vuelve a intentarlo.")
+            # ... (manejo de errores)
+            print(f"Error de API: {e.message}")
             break
         except Exception as e:
             print(f"\nOcurrió un error inesperado: {e}")
@@ -208,19 +145,22 @@ def main():
     try:
         client = setup_client()
         
-        ruta_contexto = Path(__file__).parent.parent / 'context'
-        contexto_archivos = cargar_contexto_desde_archivos(ruta_contexto)
-        
-        prompt_sistema_final = create_system_prompt(contexto_archivos)
-        
-        initial_history = [{"role": "system", "content": prompt_sistema_final}]
+        # Carga el prompt base desde el archivo de texto
+        prompt_path = Path(__file__).parent.parent / 'prompt.txt'
+        base_prompt = load_system_prompt(prompt_path)
 
-        run_chat_loop(client, initial_history)
+        # Carga el conocimiento desde el índice
+        index_path = Path(__file__).parent.parent / 'context_index.json'
+        context_chunks = load_context_chunks(index_path)
 
-    except ValueError as e:
-        print(f"\nError de configuración: {e}")
+        # Inicia el chat
+        run_chat_loop(client, context_chunks, base_prompt)
+
+    except (ValueError, FileNotFoundError, RuntimeError) as e:
+        print(f"\nError de inicio: {e}")
     except Exception as e:
         print(f"\nOcurrió un error crítico durante el inicio: {e}")
 
 if __name__ == "__main__":
     main()
+
