@@ -56,7 +56,9 @@ class ChatController:
     def _setup_client(self) -> OpenAI:
         api_key = os.getenv("API_KEY")
         if not api_key:
-            raise ValueError("No se encontró la DEEPSEEK_API_KEY en el .env.")
+            error_msg = "---\n--- FATAL ERROR: La variable de entorno API_KEY no fue encontrada. Por favor, configúrala en Railway. ---\n---"
+            print(error_msg)
+            raise ValueError(error_msg)
         return OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")
 
     def _find_relevant_context(self, query: str, top_k: int = 3) -> str:
