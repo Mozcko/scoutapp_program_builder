@@ -1,60 +1,89 @@
 import pypdf
 from pathlib import Path
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
+import pickle
 
-# Define las rutas relativas al script
-# Asume que este script se ejecuta desde la raíz del proyecto
-SOURCE_FOLDER = Path(__file__).parent.parent / 'context'
-CACHE_FILE = Path(__file__).parent / 'processed_context.txt'
+# --- CONFIGURACIÓN ---
+SOURCE_FOLDER = Path(__file__).parent.parent.parent / 'context'
+CACHE_FOLDER = Path(__file__).parent.parent.parent / 'cache' # Carpeta para guardar el índice
+CHUNK_SIZE = 512  # Tamaño de los fragmentos de texto en caracteres
+CHUNK_OVERLAP = 50 # Superposición para no perder contexto entre fragmentos
 
-def preprocess_files():
-    """
-    Lee todos los archivos de la carpeta de contexto, extrae el texto,
-    y guarda el resultado combinado en un único archivo de caché.
-    """
-    print(f"Iniciando preprocesamiento de archivos desde: {SOURCE_FOLDER}...")
+# Modelo para crear los embeddings. 'all-MiniLM-L6-v2' es ligero y multilingüe.
+EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
 
+def read_all_text_from_source() -> str:
+    """Lee y extrae texto de todos los archivos en la carpeta de contexto."""
+    print(f"1. Leyendo archivos desde: {SOURCE_FOLDER}...")
     if not SOURCE_FOLDER.is_dir():
-        print(f"ERROR: La carpeta de contexto '{SOURCE_FOLDER}' no existe. No se puede continuar.")
-        return
+        raise FileNotFoundError(f"La carpeta de contexto '{SOURCE_FOLDER}' no existe.")
 
-    archivos_a_procesar = [f for f in SOURCE_FOLDER.iterdir() if f.is_file()]
-    total_archivos = len(archivos_a_procesar)
-    
-    if total_archivos == 0:
-        print("No se encontraron archivos en la carpeta de contexto.")
-        return
-
-    print(f"Se encontraron {total_archivos} archivos para procesar.")
-    contexto_completo = []
-
-    for i, archivo in enumerate(sorted(archivos_a_procesar), 1):
-        print(f"  [{i}/{total_archivos}] Procesando '{archivo.name}'...", end="", flush=True)
-        contenido_archivo = ""
+    full_text = []
+    for archivo in sorted(SOURCE_FOLDER.iterdir()):
+        if not archivo.is_file():
+            continue
         try:
             if archivo.suffix.lower() == '.pdf':
                 reader = pypdf.PdfReader(archivo, strict=False)
-                texto_paginas = [page.extract_text() for page in reader.pages if page.extract_text()]
-                contenido_archivo = "\n".join(texto_paginas)
+                texto_paginas = [p.extract_text() for p in reader.pages if p.extract_text()]
+                full_text.append("\n".join(texto_paginas))
             else:
-                contenido_archivo = archivo.read_text(encoding='utf-8', errors='ignore')
-
-            if contenido_archivo.strip():
-                contexto_completo.append(f"--- INICIO DEL ARCHIVO: {archivo.name} ---\n")
-                contexto_completo.append(contenido_archivo)
-                contexto_completo.append(f"\n--- FIN DEL ARCHIVO: {archivo.name} ---\n\n")
-                print(" OK")
-            else:
-                print(" Vacío (sin texto).")
-        
+                full_text.append(archivo.read_text(encoding='utf-8', errors='ignore'))
         except Exception as e:
-            print(f" ERROR ({type(e).__name__})")
+            print(f"  - Advertencia: No se pudo leer el archivo {archivo.name}: {e}")
+    print("  Lectura de archivos completada.")
+    return "\n\n".join(full_text)
+
+def split_text_into_chunks(text: str) -> list[str]:
+    """Divide el texto completo en fragmentos más pequeños."""
+    print("2. Dividiendo el texto en fragmentos (chunks)...")
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + CHUNK_SIZE
+        chunks.append(text[start:end])
+        start += CHUNK_SIZE - CHUNK_OVERLAP
+    print(f"  Se crearon {len(chunks)} fragmentos.")
+    return chunks
+
+def create_and_save_index(chunks: list[str]):
+    """Crea embeddings y guarda el índice FAISS y los fragmentos de texto."""
+    print(f"3. Creando embeddings con el modelo '{EMBEDDING_MODEL}' (esto puede tardar)...")
+    model = SentenceTransformer(EMBEDDING_MODEL)
+    embeddings = model.encode(chunks, show_progress_bar=True)
     
-    # Escribir el contenido combinado al archivo de caché
+    if not embeddings.any():
+        raise ValueError("No se pudieron generar embeddings. ¿Los archivos de contexto están vacíos?")
+
+    # Crear índice FAISS
+    dimension = embeddings.shape[1]
+    index = faiss.IndexFlatL2(dimension)
+    index.add(np.array(embeddings).astype('float32'))
+    
+    # Crear la carpeta de caché si no existe
+    CACHE_FOLDER.mkdir(exist_ok=True)
+    
+    # Guardar el índice y los fragmentos
+    faiss.write_index(index, str(CACHE_FOLDER / "context.faiss"))
+    with open(CACHE_FOLDER / "chunks.pkl", "wb") as f:
+        pickle.dump(chunks, f)
+        
+    print("4. ¡Índice y fragmentos guardados exitosamente en la carpeta 'cache'!")
+
+def main():
+    """Flujo principal del preprocesamiento."""
     try:
-        CACHE_FILE.write_text("".join(contexto_completo), encoding='utf-8')
-        print(f"\n¡Preprocesamiento finalizado! Contexto guardado en '{CACHE_FILE}'.")
+        full_text = read_all_text_from_source()
+        if not full_text.strip():
+            print("No se encontró texto en los archivos de contexto. Abortando.")
+            return
+        chunks = split_text_into_chunks(full_text)
+        create_and_save_index(chunks)
+        print("\nPreprocesamiento finalizado. Ya puedes ejecutar la aplicación de chat.")
     except Exception as e:
-        print(f"\nError al guardar el archivo de caché: {e}")
+        print(f"\nOcurrió un error durante el preprocesamiento: {e}")
 
 if __name__ == "__main__":
-    preprocess_files()
+    main()

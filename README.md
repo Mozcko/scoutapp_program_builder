@@ -47,18 +47,18 @@ Sigue estos pasos para poner en marcha el proyecto en tu máquina local.
     ```
     Abre el archivo y añade tu clave de API de DeepSeek:
     ```
-    DEEPSEEK_API_KEY="tu_api_key_aqui"
+    API_KEY="tu_api_key_aqui"
     ```
 
 ## Cómo Ejecutar la Aplicación
 
 Para ejecutar la versión de consola:
 ```bash
-python mi_app_deepseek/console_chat.py
+python python ./src/AI\ stuff/deepseek_chat.py
 ```
 
 Para ejecutar la versión con interfaz gráfica (Flet):
 ```bash
-flet run mi_app_deepseek/main.py
+flet run 
 ```
 
