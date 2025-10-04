@@ -1,26 +1,30 @@
 import flet as ft
-
+from views.chat_view import ChatView
+from views.home_view import HomeView
 
 def main(page: ft.Page):
-    counter = ft.Text("0", size=50, data=0)
+    page.title = "Scout Program Builder"
+    page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
+    page.vertical_alignment = ft.MainAxisAlignment.SPACE_BETWEEN
+    page.theme_mode = ft.ThemeMode.DARK
 
-    def increment_click(e):
-        counter.data += 1
-        counter.value = str(counter.data)
-        counter.update()
+    # Diccionario de vistas para el enrutamiento
+    views = {
+        "/": HomeView(page),
+        "/chat": ChatView(page),
+    }
 
-    page.floating_action_button = ft.FloatingActionButton(
-        icon=ft.Icons.ADD, on_click=increment_click
-    )
-    page.add(
-        ft.SafeArea(
-            ft.Container(
-                counter,
-                alignment=ft.alignment.center,
-            ),
-            expand=True,
-        )
-    )
+    def route_change(route):
+        page.views.clear()
+        # Obtiene la vista correspondiente a la ruta, o la de inicio si no se encuentra
+        view = views.get(page.route, views["/"])
+        page.views.append(view)
+        page.go(page.route)
 
+    page.on_route_change = route_change
+    page.go(page.route)
 
-ft.app(main)
+if __name__ == "__main__":
+    ft.app(target=main)
+    # Para desplegar como una aplicación web, puedes usar:
+    # ft.app(target=main, view=ft.AppView.WEB_BROWSER)

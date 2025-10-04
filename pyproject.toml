@@ -1,10 +1,17 @@
 [project]
-name = "scoutapp_program_builder"
+name = "scoutapp-program-builder"
 version = "0.1.0"
-description = ""
+description = "Una aplicación de chat inteligente para crear programas Scout."
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = [ "flet==0.28.3", "openai>=1.0", "python-dotenv>=1.0", "pypdf>=4.0" ]
+dependencies = [
+"flet==0.28.3",
+"openai>=1.0",
+"python-dotenv>=1.0",
+"pypdf>=4.0",
+"sentence-transformers>=2.0",
+"faiss-cpu>=1.7"
+]
 
 
 [[project.authors]]
@@ -15,7 +22,7 @@ email = "contacto@joaquinramos.dev"
 [tool.flet]
 org = "com.joaquinramos"
 product = "scoutapp-program-builder"
-company = "joaquin Ramos Developer"
+company = "Joaquin Ramos Developer"
 copyright = "Copyright (C) 2025 by Joaquín Eduardo Ramos Farfán"
 
 
