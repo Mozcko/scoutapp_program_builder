@@ -1,3 +1,4 @@
+import os
 import flet as ft
 from views.chat_view import ChatView
 from views.home_view import HomeView
@@ -25,5 +26,7 @@ def main(page: ft.Page):
     page.go(page.route)
 
 if __name__ == "__main__":
-    # Inicia la aplicación en modo servidor web, lista para producción
-    ft.app(target=main, port=8502, host="0.0.0.0")
+    # Para despliegue web, es crucial especificar el host y el puerto.
+    # Railway usará la variable de entorno PORT, pero definimos un valor por defecto.
+    port = int(os.getenv("PORT", 8502))
+    ft.app(target=main, port=port, host="0.0.0.0")

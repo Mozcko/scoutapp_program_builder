@@ -1,27 +1,12 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
-    "nixpacks": {
-      "pkgs": [
-        "python311",
-        "gtk3",
-        "gstreamer",
-        "gst_plugins_base",
-        "gst_plugins_good",
-        "gst_plugins_bad",
-        "mpv-unwrapped",
-        "xorg.xvfb",
-        "xorg.xauth"
-      ],
-      "install": [
-        "pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu",
-        "pip install --no-cache-dir -r requirements.txt"
-      ]
-    }
+    "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "xvfb-run python3 src/main.py",
+    "startCommand": "python src/main.py",
+    "healthcheckPath": "/",
+    "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
