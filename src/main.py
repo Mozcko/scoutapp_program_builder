@@ -25,6 +25,5 @@ def main(page: ft.Page):
     page.go(page.route)
 
 if __name__ == "__main__":
-    ft.app(target=main)
-    # Para desplegar como una aplicación web, puedes usar:
-    # ft.app(target=main, view=ft.AppView.WEB_BROWSER)
+    # Inicia la aplicación en modo servidor web, lista para producción
+    ft.app(target=main, port=8502, host="0.0.0.0")
