@@ -8,7 +8,7 @@ WORKDIR /src
 COPY requirements.txt ./
 
 # Instala las dependencias
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copia todo el código de tu aplicación al contenedor
 COPY . .
