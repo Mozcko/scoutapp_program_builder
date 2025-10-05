@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
 # --- CONFIGURACIÓN Y CARGA INICIAL ---
-# Esta sección se ejecuta solo una vez cuando se importa el módulo.
+print("DEBUG: [1] Iniciando carga de chat_controller.")
 
 # Cargar variables de entorno
 try:
@@ -15,6 +15,7 @@ try:
     load_dotenv(dotenv_path=env_path)
 except Exception:
     print("Advertencia: No se pudo cargar el archivo .env.")
+print("DEBUG: [2] Carga de .env intentada.")
 
 # Cargar el prompt base
 try:
@@ -23,25 +24,31 @@ try:
 except Exception:
     BASE_PROMPT = "Eres un asistente servicial."
     print("Advertencia: No se pudo cargar el prompt. Se usará uno por defecto.")
+print("DEBUG: [3] Carga de prompt.txt intentada.")
 
 # Cargar el índice RAG (FAISS y chunks)
+faiss_index = None
+chunks = []
 try:
+    print("DEBUG: [4] Intentando cargar índice FAISS y chunks.")
     cache_folder = Path(__file__).parent.parent.parent / 'cache'
     faiss_index = faiss.read_index(str(cache_folder / "context.faiss"))
     with open(cache_folder / "chunks.pkl", "rb") as f:
         chunks = pickle.load(f)
-except Exception:
-    faiss_index = None
-    chunks = []
-    print("Error: No se pudo cargar el índice RAG. La búsqueda de contexto no funcionará.")
-    print("Asegúrate de ejecutar 'python preprocess_files.py' primero.")
+    print("DEBUG: [5] Carga de índice FAISS y chunks completada.")
+except Exception as e:
+    print(f"DEBUG: [5-ERROR] Error al cargar índice: {e}")
 
 # Cargar el modelo de embeddings
+embedding_model = None
 try:
+    print("DEBUG: [6] Intentando cargar modelo de embeddings SentenceTransformer.")
     embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-except Exception:
-    embedding_model = None
-    print("Error: No se pudo cargar el modelo de embeddings.")
+    print("DEBUG: [7] Carga de modelo de embeddings completada.")
+except Exception as e:
+    print(f"DEBUG: [7-ERROR] Error al cargar modelo: {e}")
+
+print("DEBUG: [8] Carga de chat_controller finalizada.")
 
 # --- CLASE DEL CONTROLADOR ---
 
